@@ -15,37 +15,36 @@
  */
 package com.google.auto.service.processor;
 
-import static com.google.auto.common.MoreElements.getAnnotationMirror;
-
 import com.google.auto.service.AutoService;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.sun.tools.javac.code.Attribute;
+import com.sun.tools.javac.code.Type;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedOptions;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.*;
+import javax.lang.model.util.Types;
+import javax.tools.Diagnostic.Kind;
+import javax.tools.FileObject;
+import javax.tools.StandardLocation;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.List;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.SortedSet;
-import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Filer;
-import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedOptions;
-import javax.lang.model.SourceVersion;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
-import javax.lang.model.util.Types;
-import javax.tools.Diagnostic.Kind;
-import javax.tools.FileObject;
-import javax.tools.StandardLocation;
+
+import static com.google.auto.common.MoreElements.getAnnotationMirror;
 
 /**
  * Processes {@link AutoService} annotations and generates the service provider
@@ -128,25 +127,29 @@ public class AutoServiceProcessor extends AbstractProcessor {
       // TODO(gak): check for error trees?
       TypeElement providerImplementer = (TypeElement) e;
       AnnotationMirror providerAnnotation = getAnnotationMirror(e, AutoService.class).get();
-      DeclaredType providerInterface = getProviderInterface(providerAnnotation);
-      TypeElement providerType = (TypeElement) providerInterface.asElement();
+      List<Type> providerInterfaces = getProviderInterface(providerAnnotation);
 
-      log("provider interface: " + providerType.getQualifiedName());
-      log("provider implementer: " + providerImplementer.getQualifiedName());
+      for (Type providerInterface : providerInterfaces) {
+        TypeElement providerType = (TypeElement) providerInterface.asElement();
 
-      if (!checkImplementer(providerImplementer, providerType)) {
-        String message = "ServiceProviders must implement their service provider interface. "
-            + providerImplementer.getQualifiedName() + " does not implement "
-            + providerType.getQualifiedName();
-        error(message, e, providerAnnotation);
+        log("provider interface: " + providerType.getQualifiedName());
+        log("provider implementer: " + providerImplementer.getQualifiedName());
+
+        if (!checkImplementer(providerImplementer, providerType)) {
+          String message = "ServiceProviders must implement their service provider interface. "
+                  + providerImplementer.getQualifiedName() + " does not implement "
+                  + providerType.getQualifiedName();
+          error(message, e, providerAnnotation);
+        }
+
+        String providerTypeName = getBinaryName(providerType);
+        String providerImplementerName = getBinaryName(providerImplementer);
+        log("provider interface binary name: " + providerTypeName);
+        log("provider implementer binary name: " + providerImplementerName);
+
+        providers.put(providerTypeName, providerImplementerName);
       }
 
-      String providerTypeName = getBinaryName(providerType);
-      String providerImplementerName = getBinaryName(providerImplementer);
-      log("provider interface binary name: " + providerTypeName);
-      log("provider implementer binary name: " + providerImplementerName);
-
-      providers.put(providerTypeName, providerImplementerName);
     }
   }
 
@@ -243,7 +246,7 @@ public class AutoServiceProcessor extends AbstractProcessor {
     return getBinaryNameImpl(typeElement, typeElement.getSimpleName() + "$" + className);
   }
 
-  private DeclaredType getProviderInterface(AnnotationMirror providerAnnotation) {
+  private List<Type> getProviderInterface(AnnotationMirror providerAnnotation) {
 
     // The very simplest of way of doing this, is also unfortunately unworkable.
     // We'd like to do:
@@ -258,8 +261,16 @@ public class AutoServiceProcessor extends AbstractProcessor {
         providerAnnotation.getElementValues();
     log("annotation values: " + valueIndex);
 
-    AnnotationValue value = valueIndex.values().iterator().next();
-    return (DeclaredType) value.getValue();
+    AnnotationValue annotationValue = valueIndex.values().iterator().next();
+    final Object value = annotationValue.getValue();
+
+    final List<Type> result = new LinkedList<Type>();
+
+    for (Object declaredType : (List<?>)value) {
+      result.add(((Attribute.Class)declaredType).getValue());
+    }
+
+    return result;
   }
 
   private void log(String msg) {

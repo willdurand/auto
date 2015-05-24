@@ -32,13 +32,13 @@ import java.lang.annotation.Target;
  * <ul>
  * <li>be a non-inner, non-anonymous, concrete class
  * <li>have a publicly accessible no-arg constructor
- * <li>implement the interface type returned by {@code value()}
+ * <li>implement the interface types returned by {@code value()}
  * </ul>
  */
 @Documented
 @Retention(SOURCE)
 @Target(TYPE)
 public @interface AutoService {
-  /** Returns the interface implemented by this service provider. */
-  Class<?> value();
+  /** Returns the interfaces implemented by this service provider. */
+  Class<?>[] value();
 }

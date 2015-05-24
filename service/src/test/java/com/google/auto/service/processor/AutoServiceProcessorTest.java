@@ -35,6 +35,7 @@ public class AutoServiceProcessorTest {
     assert_().about(javaSources())
         .that(Arrays.asList(
             JavaFileObjects.forResource("test/SomeService.java"),
+            JavaFileObjects.forResource("test/SomeAnotherServiceProvider.java"),
             JavaFileObjects.forResource("test/SomeServiceProvider1.java"),
             JavaFileObjects.forResource("test/SomeServiceProvider2.java"),
             JavaFileObjects.forResource("test/Enclosing.java"),
